@@ -8,13 +8,13 @@ typedef enum {
     ESTADO_ABIERTO,
     ESTADO_PARADA,
     ESTADO_CERRANDO,
-    ESTADO_ABRIENDO,    // Nuevo estado
+    ESTADO_ABRIENDO,
     ESTADO_BLOQUEADA_ERROR,
     ESTADO_DESCONOCIDA,
     NUM_ESTADOS
 } EstadoPuerta;
 
-// Definición de eventos que pueden ocurrir
+
 typedef enum {
     EVENTO_ABRIR,
     EVENTO_CERRAR,
@@ -22,11 +22,11 @@ typedef enum {
     EVENTO_ERROR,
     EVENTO_RESET,
     EVENTO_FIN_CARRERA,
-    EVENTO_FIN_APERTURA,  // Nuevo evento para detectar apertura completa
+    EVENTO_FIN_APERTURA,
     NUM_EVENTOS
 } EventoPuerta;
 
-// Estructura para la máquina de estados
+
 typedef struct {
     EstadoPuerta estadoActual;
     int tiempoEnEstado;
@@ -54,12 +54,12 @@ void accionParada(MaquinaEstadosPuerta* maquina) {
 
 void accionCerrando(MaquinaEstadosPuerta* maquina) {
     printf("Cerrando puerta\n");
-    // Aquí podrías agregar el control del motor en sentido de cierre
+
 }
 
 void accionAbriendo(MaquinaEstadosPuerta* maquina) {
     printf("Abriendo puerta\n");
-    // Aquí podrías agregar el control del motor en sentido de apertura
+
 }
 
 void accionBloqueadaError(MaquinaEstadosPuerta* maquina) {
@@ -70,7 +70,7 @@ void accionDesconocida(MaquinaEstadosPuerta* maquina) {
     printf("Estado desconocido - requiere calibración\n");
 }
 
-// Función de transición
+
 EstadoPuerta obtenerSiguienteEstado(MaquinaEstadosPuerta* maquina, EventoPuerta evento) {
     switch (maquina->estadoActual) {
         case ESTADO_RESET:
@@ -78,7 +78,7 @@ EstadoPuerta obtenerSiguienteEstado(MaquinaEstadosPuerta* maquina, EventoPuerta 
             break;
 
         case ESTADO_CERRADA:
-            if (evento == EVENTO_ABRIR) return ESTADO_ABRIENDO;  // Cambiado a ABRIENDO
+            if (evento == EVENTO_ABRIR) return ESTADO_ABRIENDO;
             if (evento == EVENTO_ERROR) return ESTADO_BLOQUEADA_ERROR;
             break;
 
@@ -88,7 +88,7 @@ EstadoPuerta obtenerSiguienteEstado(MaquinaEstadosPuerta* maquina, EventoPuerta 
             break;
 
         case ESTADO_PARADA:
-            if (evento == EVENTO_ABRIR) return ESTADO_ABRIENDO;  // Cambiado a ABRIENDO
+            if (evento == EVENTO_ABRIR) return ESTADO_ABRIENDO;
             if (evento == EVENTO_CERRAR) return ESTADO_CERRANDO;
             if (evento == EVENTO_ERROR) return ESTADO_BLOQUEADA_ERROR;
             break;
@@ -99,7 +99,7 @@ EstadoPuerta obtenerSiguienteEstado(MaquinaEstadosPuerta* maquina, EventoPuerta 
             if (evento == EVENTO_ERROR) return ESTADO_BLOQUEADA_ERROR;
             break;
 
-        case ESTADO_ABRIENDO:  // Nuevo caso
+        case ESTADO_ABRIENDO:
             if (evento == EVENTO_PARAR) return ESTADO_PARADA;
             if (evento == EVENTO_FIN_APERTURA) return ESTADO_ABIERTO;
             if (evento == EVENTO_ERROR) return ESTADO_BLOQUEADA_ERROR;
@@ -117,14 +117,14 @@ EstadoPuerta obtenerSiguienteEstado(MaquinaEstadosPuerta* maquina, EventoPuerta 
     return maquina->estadoActual;
 }
 
-// Inicializar la máquina de estados
+
 void inicializarMaquina(MaquinaEstadosPuerta* maquina) {
     maquina->estadoActual = ESTADO_DESCONOCIDA;
     maquina->tiempoEnEstado = 0;
     maquina->sensorObstaculo = 0;
 }
 
-// Procesar un evento
+
 void procesarEvento(MaquinaEstadosPuerta* maquina, EventoPuerta evento) {
     EstadoPuerta nuevoEstado = obtenerSiguienteEstado(maquina, evento);
 
@@ -132,7 +132,7 @@ void procesarEvento(MaquinaEstadosPuerta* maquina, EventoPuerta evento) {
         maquina->estadoActual = nuevoEstado;
         maquina->tiempoEnEstado = 0;
 
-        // Ejecutar la acción del nuevo estado
+
         switch (maquina->estadoActual) {
             case ESTADO_RESET:
                 accionReset(maquina);
