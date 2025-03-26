@@ -12,59 +12,66 @@
 #define TIEMPO_ANTIREBOTE 30      
 
 static TimerHandle_t temporizador_parpadeo;
-static QueueHandle_t cola_pulsaciones;
+static TimerHandle_t temporizador_medicion;
 static volatile uint32_t duracion_pulsacion = 0;
+static TaskHandle_t tarea_notificacion = NULL;
 static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
+// Interrupción del botón
 void IRAM_ATTR manejar_interrupcion(void *arg) {
-    static uint32_t momento_inicio = 0;
     static uint32_t ultima_interrupcion = 0;
     uint32_t ahora = xTaskGetTickCountFromISR();
-    
-    
-    if ((ahora - ultima_interrupcion) < pdMS_TO_TICKS(TIEMPO_ANTIREBOTE)) {
-        return;
-    }
+
+    // Antirrebote
+    if ((ahora - ultima_interrupcion) < pdMS_TO_TICKS(TIEMPO_ANTIREBOTE)) return;
     ultima_interrupcion = ahora;
-    
+
     if (gpio_get_level(PULSADOR_GPIO)) {
-        // Botón liberado
-        portENTER_CRITICAL_ISR(&mux);
-        duracion_pulsacion = (esp_timer_get_time() - momento_inicio) / 1000;
-        portEXIT_CRITICAL_ISR(&mux);
-        xQueueSendFromISR(cola_pulsaciones, &duracion_pulsacion, NULL);
+        // Botón liberado -> detener medición
+        xTimerStopFromISR(temporizador_medicion, NULL);
+        xTaskNotifyFromISR(tarea_notificacion, duracion_pulsacion, eSetValueWithOverwrite, NULL);
     } else {
-        // Botón presionado
-        momento_inicio = esp_timer_get_time();
+        // Botón presionado -> iniciar medición
+        duracion_pulsacion = 0;
         gpio_set_level(LED_GPIO, 1);
+        xTimerStartFromISR(temporizador_medicion, NULL);
     }
 }
 
-void controlar_parpadeo(TimerHandle_t xTemporizador) {
+// Callback del timer de medición
+void medir_tiempo(TimerHandle_t xTimer) {
+    portENTER_CRITICAL(&mux);
+    duracion_pulsacion += 10;  // Incrementa en ms
+    portEXIT_CRITICAL(&mux);
+}
+
+// Callback del timer de parpadeo
+void controlar_parpadeo(TimerHandle_t xTimer) {
     static bool estado_led = false;
     estado_led = !estado_led;
     gpio_set_level(LED_GPIO, estado_led);
 }
 
+// Tarea que procesa la pulsación
 void tarea_procesar_pulsacion(void *arg) {
     uint32_t duracion;
     while (1) {
-        if (xQueueReceive(cola_pulsaciones, &duracion, portMAX_DELAY)) {
+        if (xTaskNotifyWait(0, 0, &duracion, portMAX_DELAY)) {
             printf("Pulsación detectada: %d ms\n", duracion);
-            
+
             gpio_set_level(LED_GPIO, 0);
             xTimerChangePeriod(temporizador_parpadeo, pdMS_TO_TICKS(duracion / 2), 0);
             xTimerStart(temporizador_parpadeo, 0);
-            
-            vTaskDelay(pdMS_TO_TICKS(duracion * 3)); 
+
+            vTaskDelay(pdMS_TO_TICKS(duracion));  
             xTimerStop(temporizador_parpadeo, 0);
             gpio_set_level(LED_GPIO, 0);
         }
     }
 }
 
+// Configuración e inicio de la aplicación
 void iniciar_aplicacion() {
-    // Configuración de hardware
     gpio_reset_pin(LED_GPIO);
     gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
     
@@ -73,16 +80,13 @@ void iniciar_aplicacion() {
     gpio_pullup_en(PULSADOR_GPIO);
     gpio_set_intr_type(PULSADOR_GPIO, GPIO_INTR_ANYEDGE);
     
-    
     gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1);
     gpio_isr_handler_add(PULSADOR_GPIO, manejar_interrupcion, NULL);
     
-    
-    cola_pulsaciones = xQueueCreate(5, sizeof(uint32_t));
     temporizador_parpadeo = xTimerCreate("Parpadeo", pdMS_TO_TICKS(500), pdTRUE, NULL, controlar_parpadeo);
+    temporizador_medicion = xTimerCreate("Medicion", pdMS_TO_TICKS(10), pdTRUE, NULL, medir_tiempo);
     
-    
-    xTaskCreate(tarea_procesar_pulsacion, "Procesar Pulsacion", 2560, NULL, 12, NULL);
+    xTaskCreate(tarea_procesar_pulsacion, "Procesar Pulsacion", 2560, NULL, 12, &tarea_notificacion);
     
     printf("Sistema listo. Presione el pulsador para comenzar.\n");
 }
